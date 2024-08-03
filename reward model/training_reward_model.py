@@ -1,6 +1,5 @@
 import json
 import pandas as pd
-from peft import get_peft_model, LoraConfig
 from sklearn.model_selection import train_test_split
 from torch import nn, optim
 from torch.utils.data import DataLoader
@@ -121,48 +120,51 @@ def evaluate_model(model, device, tokenizer, term, termVis):
     return rewards
 
 
-def main():
-    if torch.cuda.is_available():
-        device = torch.device('cuda')
-        print("CUDA is available. Using GPU.")
-    else:
-        device = torch.device('cpu')
-        print("CUDA is not available. Using CPU.")
-    # Khởi tạo mô hình gốc
-    model_name = "vinai/phobert-base-v2"
+def main(strategy="normal", model_name="vinai/phobert-base-v2"):
+    
+    # init root model
     base_model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=1)
-    tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-base-v2")
-
-    # Tạo DataLoader cho tập huấn luyện và tập kiểm tra
-    data_path = "./DummyDatas.json"
-    max_len = 258
-    train_dataset = RankingDataset(data_path, tokenizer, max_len, mode="train")
-    val_dataset = RankingDataset(data_path, tokenizer, max_len, mode="val")
-
-    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=8)
-
-    # Cấu hình LoRA
-    lora_config = LoraConfig(
-        r=8,
-        lora_alpha=16,
-        lora_dropout=0.1,
-        target_modules=[
-            "query",
-            "key",
-            "value"
-        ]
-    )
-    # Áp dụng LoRA vào mô hình gốc
-    model = get_peft_model(base_model, lora_config)
-    model.to(device)
-
-    # Khởi tạo criterion và optimizer
-    criterion = nn.BCEWithLogitsLoss()
-    optimizer = optim.Adam(model.parameters(), lr=2e-5)
-
-    train_model(model, device, train_loader, val_loader, criterion, optimizer, epochs=3)
-
-
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    
+    if strategy == "peft":
+        from peft import get_peft_model, LoraConfig
+        if torch.cuda.is_available():
+            device = torch.device('cuda')
+            print("CUDA is available. Using GPU.")
+        else:
+            device = torch.device('cpu')
+            print("CUDA is not available. Using CPU.")
+    
+        # Tạo DataLoader cho tập huấn luyện và tập kiểm tra
+        data_path = "./DummyDatas.json"
+        max_len = 258
+        train_dataset = RankingDataset(data_path, tokenizer, max_len, mode="train")
+        val_dataset = RankingDataset(data_path, tokenizer, max_len, mode="val")
+    
+        train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=8)
+    
+        # Cấu hình LoRA
+        lora_config = LoraConfig(
+            r=8,
+            lora_alpha=16,
+            lora_dropout=0.1,
+            target_modules=[
+                "query",
+                "key",
+                "value"
+            ]
+        )
+        # Áp dụng LoRA vào mô hình gốc
+        model = get_peft_model(base_model, lora_config)
+        model.to(device)
+    
+        # Khởi tạo criterion và optimizer
+        criterion = nn.BCEWithLogitsLoss()
+        optimizer = optim.Adam(model.parameters(), lr=2e-5)
+    
+        train_model(model, device, train_loader, val_loader, criterion, optimizer, epochs=3)
+    if strategy == "normal":
+        pass
 if __name__ == "__main__":
     main()
